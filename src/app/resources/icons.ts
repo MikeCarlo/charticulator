@@ -76,6 +76,10 @@ addSVGIcon(
   "general/more-vertical",
   require("url-loader!resources/icons/icons_more-vertical.svg")
 );
+addSVGIcon(
+  "general/replace",
+  require("url-loader!resources/icons/icons_replace.svg")
+);
 addSVGIcon("general/eye", require("url-loader!resources/icons/icons_eye.svg"));
 addSVGIcon(
   "general/eye-faded",
@@ -323,6 +327,10 @@ addSVGIcon(
 addSVGIcon(
   "mark/image",
   require("url-loader!resources/icons/icons_element-image.svg")
+);
+addSVGIcon(
+  "mark/icon",
+  require("url-loader!resources/icons/icons_element-icon.svg")
 );
 addSVGIcon(
   "mark/symbol",

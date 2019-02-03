@@ -3,81 +3,131 @@
 
 import { Point } from "../../common";
 import * as Graphics from "../../graphics";
-import { ConstraintSolver } from "../../solver";
 import * as Specification from "../../specification";
 import {
   BoundingBox,
   Controls,
   DropZones,
   Handles,
+  LinkAnchor,
   ObjectClassMetadata,
-  SnappingGuides,
-  TemplateParameters
+  SnappingGuides
 } from "../common";
 import { ChartStateManager } from "../state";
 import { EmphasizableMarkClass } from "./emphasis";
 import {
-  textAttributes,
-  TextElementAttributes,
-  TextElementProperties
-} from "./text.attrs";
+  iconAttributes,
+  IconElementAttributes,
+  IconElementProperties
+} from "./icon.attrs";
+import { imagePlaceholder } from "./image";
 
-export { TextElementAttributes, TextElementProperties };
+export { IconElementAttributes, IconElementProperties };
 
-export class TextElementClass extends EmphasizableMarkClass<
-  TextElementProperties,
-  TextElementAttributes
+export class IconElementClass extends EmphasizableMarkClass<
+  IconElementProperties,
+  IconElementAttributes
 > {
-  public static classID = "mark.text";
+  public static classID = "mark.icon";
   public static type = "mark";
 
   public static metadata: ObjectClassMetadata = {
-    displayName: "Text",
-    iconPath: "mark/text",
+    displayName: "Icon",
+    iconPath: "mark/icon",
     creatingInteraction: {
       type: "point",
       mapping: { x: "x", y: "y" }
     }
   };
 
-  public static defaultMappingValues: Partial<TextElementAttributes> = {
-    text: "Text",
-    fontFamily: "Arial",
-    fontSize: 14,
-    color: { r: 0, g: 0, b: 0 },
-    opacity: 1,
-    visible: true
-  };
-
-  public static defaultProperties: Partial<TextElementProperties> = {
+  public static defaultProperties: Partial<IconElementProperties> = {
     alignment: { x: "middle", y: "top", xMargin: 5, yMargin: 5 },
     rotation: 0,
     visible: true
   };
 
-  public attributes = textAttributes;
-  public attributeNames = Object.keys(textAttributes);
+  public static defaultMappingValues: Partial<IconElementAttributes> = {
+    opacity: 1,
+    size: 400,
+    visible: true
+  };
 
-  // Initialize the state of an element so that everything has a valid value
+  public attributes = iconAttributes;
+  public attributeNames = Object.keys(iconAttributes);
+
   public initializeState(): void {
-    const attrs = this.state.attributes as TextElementAttributes;
+    super.initializeState();
+
+    const attrs = this.state.attributes;
     attrs.x = 0;
     attrs.y = 0;
-    attrs.text = "Text";
-    attrs.fontFamily = "Arial";
-    attrs.fontSize = 14;
-    attrs.color = {
-      r: 0,
-      g: 0,
-      b: 0
-    };
-    attrs.visible = true;
-    attrs.outline = null;
+    attrs.size = 400;
     attrs.opacity = 1;
+    attrs.visible = true;
+    attrs.image = null;
   }
 
-  // Get intrinsic constraints between attributes (e.g., x2 - x1 = width for rectangles)
-  public buildConstraints(solver: ConstraintSolver): void {}
+  /** Get link anchors for this mark */
+  public getLinkAnchors(mode: "begin" | "end"): LinkAnchor.Description[] {
+    const attrs = this.state.attributes;
+    return [
+      {
+        element: this.object._id,
+        points: [
+          {
+            x: attrs.x,
+            y: attrs.y,
+            xAttribute: "x",
+            yAttribute: "y",
+            direction: { x: mode == "begin" ? 1 : -1, y: 0 }
+          }
+        ]
+      }
+    ];
+  }
+
+  public getLayoutProps() {
+    const attrs = this.state.attributes;
+    const image = attrs.image || imagePlaceholder;
+    if (attrs.size <= 0) {
+      return { width: 0, height: 0, dx: 0, dy: 0 };
+    }
+    const h = Math.sqrt((attrs.size * image.height) / image.width);
+    const w = (h * image.width) / image.height;
+    const offsets = this.getCenterOffset(
+      this.object.properties.alignment,
+      w,
+      h
+    );
+    return {
+      width: w,
+      height: h,
+      dx: offsets[0],
+      dy: offsets[1]
+    };
+  }
+
+  public getCenterOffset(
+    alignment: Specification.Types.TextAlignment,
+    width: number,
+    height: number
+  ): [number, number] {
+    let cx: number = width / 2,
+      cy: number = height / 2;
+    if (alignment.x == "left") {
+      cx = -alignment.xMargin;
+    }
+    if (alignment.x == "right") {
+      cx = width + alignment.xMargin;
+    }
+    if (alignment.y == "bottom") {
+      cy = -alignment.yMargin;
+    }
+    if (alignment.y == "top") {
+      cy = height + alignment.yMargin;
+    }
+    return [cx, cy];
+  }
 
   // Get the graphical element from the element
   public getGraphics(
@@ -85,45 +135,35 @@ export class TextElementClass extends EmphasizableMarkClass<
     offset: Point,
     glyphIndex = 0,
     manager: ChartStateManager,
-    empasized?: boolean
+    emphasize?: boolean
   ): Graphics.Element {
     const attrs = this.state.attributes;
-    const props = this.object.properties;
     if (!attrs.visible || !this.object.properties.visible) {
       return null;
     }
-    const metrics = Graphics.TextMeasurer.Measure(
-      attrs.text,
-      attrs.fontFamily,
-      attrs.fontSize
-    );
-    const [dx, dy] = Graphics.TextMeasurer.ComputeTextPosition(
-      0,
-      0,
-      metrics,
-      props.alignment.x,
-      props.alignment.y,
-      props.alignment.xMargin,
-      props.alignment.yMargin
-    );
-    const p = cs.getLocalTransform(attrs.x + offset.x, attrs.y + offset.y);
-    p.angle += props.rotation;
-    const text = Graphics.makeText(
-      dx,
-      dy,
-      attrs.text,
-      attrs.fontFamily,
-      attrs.fontSize,
+    if (attrs.size <= 0) {
+      return null;
+    }
+    const image = attrs.image || imagePlaceholder;
+    // Compute w, h to resize the image to the desired size
+    const layout = this.getLayoutProps();
+    const gImage = Graphics.makeGroup([
       {
-        strokeColor: attrs.outline,
-        fillColor: attrs.color,
-        opacity: attrs.opacity,
-        ...this.generateEmphasisStyle(empasized)
-      }
+        type: "image",
+        src: image.src,
+        x: -layout.dx,
+        y: -layout.dy,
+        width: layout.width,
+        height: layout.height,
+        mode: "stretch"
+      } as Graphics.Image
+    ]);
+    gImage.transform = cs.getLocalTransform(
+      attrs.x + offset.x,
+      attrs.y + offset.y
     );
-    const g = Graphics.makeGroup([text]);
-    g.transform = p;
-    return g;
+    gImage.transform.angle += this.object.properties.rotation;
+    return gImage;
   }
 
   // Get DropZones given current state
@@ -132,22 +172,23 @@ export class TextElementClass extends EmphasizableMarkClass<
       {
         type: "rectangle",
         ...this.getBoundingRectangle(),
-        title: "text",
+        title: "size",
         dropAction: {
           scaleInference: {
-            attribute: "text",
-            attributeType: Specification.AttributeType.Text
+            attribute: "size",
+            attributeType: Specification.AttributeType.Number
           }
         }
       } as DropZones.Rectangle
     ];
   }
+
   // Get bounding rectangle given current state
   public getHandles(): Handles.Description[] {
     const attrs = this.state.attributes;
-    const props = this.object.properties;
-    const { x, y, x1, y1, x2, y2 } = attrs;
+    const { x, y } = attrs;
     const bbox = this.getBoundingRectangle();
+    const props = this.object.properties;
     return [
       {
         type: "point",
@@ -169,7 +210,7 @@ export class TextElementClass extends EmphasizableMarkClass<
         textHeight: bbox.height,
         anchorX: x,
         anchorY: y,
-        text: attrs.text,
+        text: null,
         alignment: props.alignment,
         rotation: props.rotation
       } as Handles.TextAlignment
@@ -177,33 +218,18 @@ export class TextElementClass extends EmphasizableMarkClass<
   }
 
   public getBoundingRectangle() {
-    const props = this.object.properties;
     const attrs = this.state.attributes;
-    const metrics = Graphics.TextMeasurer.Measure(
-      attrs.text,
-      attrs.fontFamily,
-      attrs.fontSize
-    );
-    const [dx, dy] = Graphics.TextMeasurer.ComputeTextPosition(
-      0,
-      0,
-      metrics,
-      props.alignment.x,
-      props.alignment.y,
-      props.alignment.xMargin,
-      props.alignment.yMargin
-    );
-    const cx = dx + metrics.width / 2;
-    const cy = dy + metrics.middle;
-
     const rotation = this.object.properties.rotation;
+    const layout = this.getLayoutProps();
     const cos = Math.cos((rotation / 180) * Math.PI);
     const sin = Math.sin((rotation / 180) * Math.PI);
+    const dx = layout.dx - layout.width / 2;
+    const dy = layout.dy - layout.height / 2;
     return {
-      cx: attrs.x + cx * cos - cy * sin,
-      cy: attrs.y + cx * sin + cy * cos,
-      width: metrics.width,
-      height: (metrics.middle - metrics.ideographicBaseline) * 2,
+      cx: attrs.x - dx * cos + dy * sin,
+      cy: attrs.y - dx * sin - dy * cos,
+      width: layout.width,
+      height: layout.height,
       rotation
     };
   }
@@ -225,7 +251,7 @@ export class TextElementClass extends EmphasizableMarkClass<
 
   public getSnappingGuides(): SnappingGuides.Description[] {
     const attrs = this.state.attributes;
-    const { x, y, x1, y1, x2, y2 } = attrs;
+    const { x, y } = attrs;
     return [
       { type: "x", value: x, attribute: "x" } as SnappingGuides.Axis,
       { type: "y", value: y, attribute: "y" } as SnappingGuides.Axis
@@ -236,22 +262,23 @@ export class TextElementClass extends EmphasizableMarkClass<
     manager: Controls.WidgetManager
   ): Controls.Widget[] {
     const props = this.object.properties;
-    return [
-      manager.sectionHeader("Text"),
-      manager.mappingEditor("Text", "text", {}),
-      manager.mappingEditor("Font", "fontFamily", {
-        defaultValue: "Arial"
-      }),
-      manager.mappingEditor("Size", "fontSize", {
-        hints: { rangeNumber: [0, 36] },
-        defaultValue: 14,
+    let widgets = [
+      manager.sectionHeader("Icon"),
+      manager.mappingEditor("Image", "image", {}),
+      manager.mappingEditor("Size", "size", {
+        acceptKinds: [Specification.DataKind.Numerical],
+        hints: { rangeNumber: [0, 100] },
+        defaultValue: 400,
         numberOptions: {
-          showUpdown: true,
-          updownStyle: "font",
+          showSlider: true,
           minimum: 0,
-          updownTick: 2
+          sliderRange: [0, 3600],
+          sliderFunction: "sqrt"
         }
-      }),
+      })
+    ];
+
+    widgets = widgets.concat([
       manager.sectionHeader("Anchor & Rotation"),
       manager.row(
         "Anchor X",
@@ -274,13 +301,7 @@ export class TextElementClass extends EmphasizableMarkClass<
             ? manager.horizontal(
                 [0, 1],
                 manager.label("Margin:"),
-                manager.inputNumber(
-                  { property: "alignment", field: "xMargin" },
-                  {
-                    updownTick: 1,
-                    showUpdown: true
-                  }
-                )
+                manager.inputNumber({ property: "alignment", field: "xMargin" })
               )
             : null
         )
@@ -306,21 +327,12 @@ export class TextElementClass extends EmphasizableMarkClass<
             ? manager.horizontal(
                 [0, 1],
                 manager.label("Margin:"),
-                manager.inputNumber(
-                  { property: "alignment", field: "yMargin" },
-                  {
-                    updownTick: 1,
-                    showUpdown: true
-                  }
-                )
+                manager.inputNumber({ property: "alignment", field: "yMargin" })
               )
             : null
         )
       ),
-      // manager.row("Rotation", manager.inputNumber({ property: "rotation" })),
       manager.sectionHeader("Style"),
-      manager.mappingEditor("Color", "color", {}),
-      manager.mappingEditor("Outline", "outline", {}),
       manager.mappingEditor("Opacity", "opacity", {
         hints: { rangeNumber: [0, 1] },
         defaultValue: 1,
@@ -329,28 +341,7 @@ export class TextElementClass extends EmphasizableMarkClass<
       manager.mappingEditor("Visibility", "visible", {
         defaultValue: true
       })
-    ];
-  }
-
-  public getTemplateParameters(): TemplateParameters {
-    if (
-      this.object.mappings.text &&
-      this.object.mappings.text.type != "value"
-    ) {
-      return null;
-    } else {
-      return {
-        properties: [
-          {
-            objectID: this.object._id,
-            target: {
-              attribute: "text"
-            },
-            type: Specification.AttributeType.Text,
-            default: this.state.attributes.text
-          }
-        ]
-      };
-    }
+    ]);
+    return widgets;
   }
 }

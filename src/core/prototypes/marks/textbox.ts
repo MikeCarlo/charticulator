@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
-import { Geometry, Point } from "../../common";
+import { Point } from "../../common";
 import * as Graphics from "../../graphics";
 import { ConstraintSolver, ConstraintStrength } from "../../solver";
 import * as Specification from "../../specification";
@@ -17,53 +17,48 @@ import {
 import { ChartStateManager } from "../state";
 import { EmphasizableMarkClass } from "./emphasis";
 import {
-  imageAttributes,
-  ImageElementAttributes,
-  ImageElementProperties
-} from "./image.attrs";
+  textboxAttributes,
+  TextboxElementAttributes,
+  TextboxElementProperties
+} from "./textbox.attrs";
 
-export const imagePlaceholder: Specification.Types.Image = {
-  src:
-    "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHRpdGxlPmljb25zPC90aXRsZT48cmVjdCB4PSI1LjE1MTI0IiB5PSI2LjY4NDYyIiB3aWR0aD0iMjEuNjk3NTIiIGhlaWdodD0iMTguNjEyNSIgc3R5bGU9ImZpbGw6bm9uZTtzdHJva2U6IzAwMDtzdHJva2UtbGluZWpvaW46cm91bmQ7c3Ryb2tlLXdpZHRoOjAuOTI2MTg0MTE3Nzk0MDM2OXB4Ii8+PHBvbHlnb24gcG9pbnRzPSIyMC4xNSAxMi45NDMgMTMuODExIDIxLjQwNCAxMC4xNTQgMTYuNDk4IDUuMTUxIDIzLjE3NiA1LjE1MSAyNS4zMDYgMTAuODg4IDI1LjMwNiAxNi43MTkgMjUuMzA2IDI2Ljg0OSAyNS4zMDYgMjYuODQ5IDIxLjkzIDIwLjE1IDEyLjk0MyIgc3R5bGU9ImZpbGwtb3BhY2l0eTowLjI7c3Ryb2tlOiMwMDA7c3Ryb2tlLWxpbmVjYXA6cm91bmQ7c3Ryb2tlLWxpbmVqb2luOnJvdW5kO3N0cm9rZS13aWR0aDowLjcwMDAwMDAwMDAwMDAwMDFweCIvPjxjaXJjbGUgY3g9IjExLjkyMDI3IiBjeT0iMTIuMzk5MjMiIHI9IjEuOTAyMTYiIHN0eWxlPSJmaWxsLW9wYWNpdHk6MC4yO3N0cm9rZTojMDAwO3N0cm9rZS1saW5lY2FwOnJvdW5kO3N0cm9rZS1saW5lam9pbjpyb3VuZDtzdHJva2Utd2lkdGg6MC43MDAwMDAwMDAwMDAwMDAxcHgiLz48L3N2Zz4=",
-  width: 100,
-  height: 100
-};
+export { TextboxElementAttributes, TextboxElementProperties };
 
-export { ImageElementAttributes, ImageElementProperties };
-
-export class ImageElementClass extends EmphasizableMarkClass<
-  ImageElementProperties,
-  ImageElementAttributes
+export class TextboxElementClass extends EmphasizableMarkClass<
+  TextboxElementProperties,
+  TextboxElementAttributes
 > {
-  public static classID = "mark.image";
+  public static classID = "mark.textbox";
   public static type = "mark";
 
   public static metadata: ObjectClassMetadata = {
-    displayName: "Image",
-    iconPath: "mark/image",
+    displayName: "Textbox",
+    iconPath: "mark/textbox",
     creatingInteraction: {
       type: "rectangle",
       mapping: { xMin: "x1", yMin: "y1", xMax: "x2", yMax: "y2" }
     }
   };
 
-  public static defaultProperties: Partial<ImageElementProperties> = {
+  public static defaultProperties: Partial<TextboxElementProperties> = {
     visible: true,
-    imageMode: "letterbox",
     paddingX: 0,
     paddingY: 0,
     alignX: "middle",
     alignY: "middle"
   };
 
-  public static defaultMappingValues: Partial<ImageElementAttributes> = {
-    strokeWidth: 1,
+  public static defaultMappingValues: Partial<TextboxElementAttributes> = {
+    text: "Text",
+    fontFamily: "Arial",
+    fontSize: 14,
+    color: { r: 0, g: 0, b: 0 },
     opacity: 1,
     visible: true
   };
 
-  public attributes = imageAttributes;
-  public attributeNames = Object.keys(imageAttributes);
+  public attributes = textboxAttributes;
+  public attributeNames = Object.keys(textboxAttributes);
 
   // Initialize the state of an element so that everything has a valid value
   public initializeState(): void {
@@ -78,18 +73,24 @@ export class ImageElementClass extends EmphasizableMarkClass<
     attrs.cy = 0;
     attrs.width = defaultWidth;
     attrs.height = defaultHeight;
-    attrs.stroke = null;
-    attrs.fill = null;
-    attrs.strokeWidth = 1;
-    attrs.opacity = 1;
+    attrs.color = {
+      r: 0,
+      g: 0,
+      b: 0
+    };
     attrs.visible = true;
-    attrs.image = null;
+    attrs.outline = null;
+    attrs.opacity = 1;
+    attrs.text = null;
+    attrs.fontFamily = "Arial";
+    attrs.fontSize = 14;
   }
 
   public getAttributePanelWidgets(
     manager: Controls.WidgetManager
   ): Controls.Widget[] {
-    let widgets: Controls.Widget[] = [
+    const props = this.object.properties;
+    const widgets: Controls.Widget[] = [
       manager.sectionHeader("Size"),
       manager.mappingEditor("Width", "width", {
         hints: { autoRange: true },
@@ -101,84 +102,70 @@ export class ImageElementClass extends EmphasizableMarkClass<
         acceptKinds: [Specification.DataKind.Numerical],
         defaultAuto: true
       }),
-      manager.sectionHeader("Image"),
-      manager.mappingEditor("Image", "image", {}),
+      manager.sectionHeader("Text"),
+      manager.mappingEditor("Text", "text", {}),
+      manager.mappingEditor("Font", "fontFamily", {
+        defaultValue: "Arial"
+      }),
       manager.row(
-        "Resize Mode",
-        manager.inputSelect(
-          { property: "imageMode" },
-          {
-            type: "dropdown",
-            showLabel: true,
-            labels: ["Letterbox", "Stretch"],
-            options: ["letterbox", "stretch"]
-          }
-        )
-      ),
-      ...(this.object.properties.imageMode == "letterbox"
-        ? [
-            manager.row(
-              "Align",
-              manager.horizontal(
+        "Align X",
+        manager.horizontal(
+          [0, 1],
+          manager.inputSelect(
+            { property: "alignX" },
+            {
+              type: "radio",
+              options: ["start", "middle", "end"],
+              icons: ["align/left", "align/x-middle", "align/right"],
+              labels: ["Left", "Middle", "Right"]
+            }
+          ),
+          props.alignX != "middle"
+            ? manager.horizontal(
                 [0, 1],
-                manager.inputSelect(
-                  { property: "alignX" },
+                manager.label("Margin:"),
+                manager.inputNumber(
+                  { property: "paddingX" },
                   {
-                    type: "radio",
-                    options: ["start", "middle", "end"],
-                    icons: ["align/left", "align/x-middle", "align/right"],
-                    labels: ["Left", "Middle", "Right"]
-                  }
-                ),
-                manager.inputSelect(
-                  { property: "alignY" },
-                  {
-                    type: "radio",
-                    options: ["start", "middle", "end"],
-                    icons: ["align/bottom", "align/y-middle", "align/top"],
-                    labels: ["Bottom", "Middle", "Top"]
+                    updownTick: 1,
+                    showUpdown: true
                   }
                 )
               )
-            )
-          ]
-        : []),
+            : null
+        )
+      ),
       manager.row(
-        "Padding",
+        "Align Y",
         manager.horizontal(
-          [0, 2, 0, 2],
-          manager.label("x:"),
-          manager.inputNumber(
-            { property: "paddingX" },
+          [0, 1],
+          manager.inputSelect(
+            { property: "alignY" },
             {
-              updownTick: 1,
-              showUpdown: true
+              type: "radio",
+              options: ["start", "middle", "end"],
+              icons: ["align/bottom", "align/y-middle", "align/top"],
+              labels: ["Bottom", "Middle", "Top"]
             }
           ),
-          manager.label("y:"),
-          manager.inputNumber(
-            { property: "paddingY" },
-            {
-              updownTick: 1,
-              showUpdown: true
-            }
-          )
+          props.alignY != "middle"
+            ? manager.horizontal(
+                [0, 1],
+                manager.label("Margin:"),
+                manager.inputNumber(
+                  { property: "paddingY" },
+                  {
+                    updownTick: 1,
+                    showUpdown: true
+                  }
+                )
+              )
+            : null
         )
       ),
       manager.sectionHeader("Style"),
-      manager.mappingEditor("Fill", "fill", {}),
-      manager.mappingEditor("Stroke", "stroke", {})
-    ];
-    if (this.object.mappings.stroke != null) {
-      widgets.push(
-        manager.mappingEditor("Line Width", "strokeWidth", {
-          hints: { rangeNumber: [0, 5] },
-          defaultValue: 1,
-          numberOptions: { showSlider: true, sliderRange: [0, 5], minimum: 0 }
-        })
-      );
-    }
-    widgets = widgets.concat([
+      manager.mappingEditor("Color", "color", {}),
+      manager.mappingEditor("Outline", "outline", {}),
       manager.mappingEditor("Opacity", "opacity", {
         hints: { rangeNumber: [0, 1] },
         defaultValue: 1,
@@ -187,7 +174,7 @@ export class ImageElementClass extends EmphasizableMarkClass<
       manager.mappingEditor("Visibility", "visible", {
         defaultValue: true
       })
-    ]);
+    ];
     return widgets;
   }
 
@@ -222,138 +209,93 @@ export class ImageElementClass extends EmphasizableMarkClass<
   ): Graphics.Element {
     const attrs = this.state.attributes;
     const props = this.object.properties;
-    if (!attrs.visible || !this.object.properties.visible) {
-      return null;
+    if (
+      !attrs.text ||
+      (!attrs.color && !attrs.outline) ||
+      !attrs.visible ||
+      attrs.opacity == 0
+    ) {
+      return Graphics.makeGroup([]);
     }
-    const paddingX = props.paddingX || 0;
-    const paddingY = props.paddingY || 0;
-    const alignX = props.alignX || "middle";
-    const alignY = props.alignY || "middle";
-    let image = attrs.image || imagePlaceholder;
-    if (typeof image == "string") {
-      // Be compatible with old version
-      image = { src: image, width: 100, height: 100 };
-    }
-
+    const metrics = Graphics.TextMeasurer.Measure(
+      attrs.text,
+      attrs.fontFamily,
+      attrs.fontSize
+    );
     const helper = new Graphics.CoordinateSystemHelper(cs);
-    const g = Graphics.makeGroup([]);
-
-    // If fill color is specified, draw a background rect
-    if (attrs.fill) {
-      g.elements.push(
-        helper.rect(
-          attrs.x1 + offset.x,
-          attrs.y1 + offset.y,
-          attrs.x2 + offset.x,
-          attrs.y2 + offset.y,
-          {
-            strokeColor: null,
-            fillColor: attrs.fill
-          }
-        )
-      );
-    }
-
-    // Center in local coordiantes
-    const cx = (attrs.x1 + attrs.x2) / 2;
-    const cy = (attrs.y1 + attrs.y2) / 2;
-
-    // Decide the width/height of the image area
-    // For special coordinate systems, use the middle lines' length as width/height
-    const containerWidth = Geometry.pointDistance(
-      cs.transformPoint(attrs.x1 + offset.x, cy + offset.y),
-      cs.transformPoint(attrs.x2 + offset.x, cy + offset.y)
-    );
-    const containerHeight = Geometry.pointDistance(
-      cs.transformPoint(cx + offset.x, attrs.y1 + offset.y),
-      cs.transformPoint(cx + offset.x, attrs.y2 + offset.y)
-    );
-
-    const boxWidth = Math.max(0, containerWidth - paddingX * 2);
-    const boxHeight = Math.max(0, containerHeight - paddingY * 2);
-
-    // Fit image into boxWidth x boxHeight, based on the specified option
-    let imageWidth: number;
-    let imageHeight: number;
-    switch (props.imageMode) {
-      case "stretch":
+    const pathMaker = new Graphics.PathMaker();
+    const cheight = (metrics.middle - metrics.ideographicBaseline) * 2;
+    let y = 0;
+    switch (props.alignY) {
+      case "start":
         {
-          imageWidth = boxWidth;
-          imageHeight = boxHeight;
+          y = attrs.y1 - metrics.ideographicBaseline + props.paddingY;
         }
         break;
-      case "letterbox":
-      default:
+      case "middle":
         {
-          if (image.width / image.height > boxWidth / boxHeight) {
-            imageWidth = boxWidth;
-            imageHeight = (image.height / image.width) * boxWidth;
-          } else {
-            imageHeight = boxHeight;
-            imageWidth = (image.width / image.height) * boxHeight;
-          }
+          y = attrs.cy - cheight / 2 - metrics.ideographicBaseline;
+        }
+        break;
+      case "end":
+        {
+          y = attrs.y2 - cheight - metrics.ideographicBaseline - props.paddingY;
         }
         break;
     }
-
-    // Decide the anchor position (px, py) in local coordinates
-    let px = cx;
-    let py = cy;
-    let imgX = -imageWidth / 2;
-    let imgY = -imageHeight / 2;
-    if (alignX == "start") {
-      px = attrs.x1;
-      imgX = paddingX;
-    } else if (alignX == "end") {
-      px = attrs.x2;
-      imgX = -imageWidth - paddingX;
-    }
-    if (alignY == "start") {
-      py = attrs.y1;
-      imgY = paddingY;
-    } else if (alignY == "end") {
-      py = attrs.y2;
-      imgY = -imageHeight - paddingY;
-    }
-
-    // Create the image element
-    const gImage = Graphics.makeGroup([
-      {
-        type: "image",
-        src: image.src,
-        x: imgX,
-        y: imgY,
-        width: imageWidth,
-        height: imageHeight,
-        mode: "stretch"
-      } as Graphics.Image
-    ]);
-    gImage.transform = cs.getLocalTransform(px + offset.x, py + offset.y);
-    g.elements.push(gImage);
-
-    // If stroke color is specified, stroke a foreground rect
-    if (attrs.stroke) {
-      g.elements.push(
-        helper.rect(
-          attrs.x1 + offset.x,
-          attrs.y1 + offset.y,
-          attrs.x2 + offset.x,
-          attrs.y2 + offset.y,
-          {
-            strokeColor: attrs.stroke,
-            strokeWidth: attrs.strokeWidth,
-            strokeLinejoin: "miter",
-            fillColor: null
-          }
-        )
-      );
-    }
-
-    // Apply the opacity
-    g.style = {
-      opacity: attrs.opacity
+    helper.lineTo(
+      pathMaker,
+      attrs.x1 + offset.x + props.paddingX,
+      y + offset.y,
+      attrs.x2 + offset.x - props.paddingX,
+      y + offset.y,
+      true
+    );
+    const cmds = pathMaker.path.cmds;
+    const textElement: Graphics.TextOnPath = {
+      type: "text-on-path",
+      pathCmds: cmds,
+      text: attrs.text,
+      fontFamily: attrs.fontFamily,
+      fontSize: attrs.fontSize,
+      align: props.alignX
     };
-    return g;
+    if (attrs.outline) {
+      if (attrs.color) {
+        const g = Graphics.makeGroup([
+          {
+            ...textElement,
+            style: {
+              strokeColor: attrs.outline
+            }
+          } as Graphics.TextOnPath,
+          {
+            ...textElement,
+            style: {
+              fillColor: attrs.color
+            }
+          } as Graphics.TextOnPath
+        ]);
+        g.style = { opacity: attrs.opacity };
+        return g;
+      } else {
+        return {
+          ...textElement,
+          style: {
+            strokeColor: attrs.outline,
+            opacity: attrs.opacity
+          }
+        } as Graphics.TextOnPath;
+      }
+    } else {
+      return {
+        ...textElement,
+        style: {
+          fillColor: attrs.color,
+          opacity: attrs.opacity
+        }
+      } as Graphics.TextOnPath;
+    }
   }
 
   /** Get link anchors for this mark */

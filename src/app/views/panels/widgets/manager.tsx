@@ -152,10 +152,14 @@ export class WidgetManager implements Prototypes.Controls.WidgetManager {
     );
   }
 
-  public inputText(property: Prototypes.Controls.Property) {
+  public inputText(
+    property: Prototypes.Controls.Property,
+    placeholder?: string
+  ) {
     return (
       <InputText
         defaultValue={this.getPropertyValue(property) as string}
+        placeholder={placeholder}
         onEnter={value => {
           this.emitSetProperty(property, value);
           return true;
@@ -822,7 +826,7 @@ export class WidgetManager implements Prototypes.Controls.WidgetManager {
           <ButtonRaised
             text="Import Template..."
             onClick={async () => {
-              const file = await showOpenFileDialog(["json"]);
+              const file = await showOpenFileDialog(["tmplt"]);
               const str = await readFileAsString(file);
               const data = JSON.parse(str);
               const template = new ChartTemplate(data);
@@ -1005,8 +1009,8 @@ export class DropZoneView
         {this.props.draggingHint == null
           ? this.props.children
           : this.state.isInSession
-            ? this.props.draggingHint()
-            : this.props.children}
+          ? this.props.draggingHint()
+          : this.props.children}
       </div>
     );
   }

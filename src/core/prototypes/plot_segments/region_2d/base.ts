@@ -16,7 +16,6 @@ import {
   getNumericalInterpolate
 } from "../axis";
 import { PlotSegmentClass } from "../plot_segment";
-import { argMax, argMin } from "../../../common";
 
 export interface Region2DSublayoutOptions extends Specification.AttributeMap {
   type: "dodge-x" | "dodge-y" | "grid" | "packing";
@@ -1515,12 +1514,20 @@ export class Region2DConstraintBuilder {
         let xi: number, yi: number;
         if (direction == "x" || direction == "x1") {
           xi = i % xCount;
-          yi = Math.floor(i / xCount);
+          if (alignY == "start") {
+            xi = xMax - 1 - ((markStates.length - 1 - i) % xCount);
+            yi = Math.floor((markStates.length - 1 - i) / xCount);
+          } else {
+            yi = yMax - 1 - Math.floor(i / xCount);
+          }
         } else {
-          yi = i % yCount;
+          yi = yMax - 1 - (i % yCount);
           xi = Math.floor(i / yCount);
+          if (alignX == "end") {
+            yi = (markStates.length - 1 - i) % yCount;
+            xi = xMax - 1 - Math.floor((markStates.length - 1 - i) / yCount);
+          }
         }
-        yi = yCount - 1 - yi; // flip Y
         // Adjust xi, yi based on alignment settings
         if (alignX == "end") {
           xi = xi + xCount - xMax;

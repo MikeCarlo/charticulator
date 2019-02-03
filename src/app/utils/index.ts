@@ -127,6 +127,9 @@ export function showOpenFileDialog(accept?: string[]): Promise<File> {
   return new Promise<File>((resolve, reject) => {
     const inputElement = document.createElement("input");
     inputElement.type = "file";
+    if (accept != null) {
+      inputElement.accept = accept.map(x => "." + x).join(",");
+    }
     inputElement.onchange = e => {
       if (inputElement.files.length == 1) {
         resolve(inputElement.files[0]);
@@ -136,4 +139,15 @@ export function showOpenFileDialog(accept?: string[]): Promise<File> {
     };
     inputElement.click();
   });
+}
+
+export function b64EncodeUnicode(str: string) {
+  return btoa(
+    encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => {
+      return String.fromCharCode(parseInt(p1, 16));
+    })
+  );
+}
+export function stringToDataURL(mimeType: string, content: string) {
+  return "data:" + mimeType + ";base64," + b64EncodeUnicode(content);
 }
